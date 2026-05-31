@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-const BACKEND_BASE = process.env.BACKEND_BASE ?? "http://127.0.0.1:8000/api/v1";
+const BACKEND_BASE = process.env.BACKEND_BASE ?? "https://trace-x-api.onrender.com/api/v1";
 
 async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname.replace(/^\/api\/v1/, "");
