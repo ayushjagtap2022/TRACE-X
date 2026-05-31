@@ -346,8 +346,9 @@ def train_smurf_lstm(df_acc: pd.DataFrame, df_txn: pd.DataFrame) -> None:
     best_state = None
     best_threshold = 0.5
     best_score = -1.0
+    epochs = 20
 
-    for epoch in range(50):
+    for epoch in range(epochs):
         model.train()
         total_loss = 0.0
         for bx, by in loader:
@@ -358,10 +359,9 @@ def train_smurf_lstm(df_acc: pd.DataFrame, df_txn: pd.DataFrame) -> None:
             optimizer.step()
             total_loss += loss.item()
 
-        if epoch % 10 == 0:
-            print(f"  Epoch {epoch:2d} | Loss: {total_loss / len(loader):.4f}")
+        print(f"  Epoch {epoch + 1:2d}/{epochs} | Loss: {total_loss / len(loader):.4f}")
 
-        if (epoch + 1) % 5 == 0:
+        if (epoch + 1) % 5 == 0 or epoch == epochs - 1:
             model.eval()
             with torch.no_grad():
                 logits = model(X_val)
