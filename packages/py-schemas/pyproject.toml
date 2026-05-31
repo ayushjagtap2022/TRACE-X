@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trace-x-schemas"
+version = "0.1.0"
+description = "Shared Pydantic schemas for TRACE-X."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pydantic>=2.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["trace_x_schemas*"]

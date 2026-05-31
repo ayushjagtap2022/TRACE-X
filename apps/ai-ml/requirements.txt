@@ -1,0 +1,10 @@
+-e ../../packages/py-schemas
+faker
+numpy
+pandas
+neo4j
+python-dotenv
+joblib
+scikit-learn
+torch
+shap
