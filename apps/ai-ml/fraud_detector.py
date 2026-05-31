@@ -56,11 +56,30 @@ else:
     NEO4J_DRIVER = None
 
 # ── ML Models ──────────────────────────────────────────────────────────────────
-if not MODELS_DIR.exists():
-    raise FileNotFoundError(f"Missing models directory: {MODELS_DIR}")
+MODELS_REQUIRED = [
+    "isolation_forest.pkl",
+    "scaler.pkl",
+    "lstm_model.pt",
+]
 
-ISO_MODEL = joblib.load(MODELS_DIR / "isolation_forest.pkl")
-SCALER    = joblib.load(MODELS_DIR / "scaler.pkl")
+if not MODELS_DIR.exists():
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Warning: Missing models directory created at {MODELS_DIR}.")
+
+missing_models = [name for name in MODELS_REQUIRED if not (MODELS_DIR / name).exists()]
+MODELS_AVAILABLE = len(missing_models) == 0
+if not MODELS_AVAILABLE:
+    print(
+        "Warning: ML model files are missing; fraud scoring will continue without ML inference."
+    )
+    print(f"Missing files: {missing_models}")
+
+ISO_MODEL = None
+SCALER = None
+LSTM_MODEL = None
+if MODELS_AVAILABLE:
+    ISO_MODEL = joblib.load(MODELS_DIR / "isolation_forest.pkl")
+    SCALER = joblib.load(MODELS_DIR / "scaler.pkl")
 
 SMURF_THRESHOLD = 0.90
 _thresh_path = MODELS_DIR / "smurf_threshold.json"
@@ -98,9 +117,13 @@ class SmurfLSTM(nn.Module):
         return self.fc(out[:, -1, :])
 
 
-LSTM_MODEL = SmurfLSTM()
-LSTM_MODEL.load_state_dict(torch.load(MODELS_DIR / "lstm_model.pt", map_location="cpu"))
-LSTM_MODEL.eval()
+LSTM_MODEL = None
+if MODELS_AVAILABLE:
+    LSTM_MODEL = SmurfLSTM()
+    LSTM_MODEL.load_state_dict(torch.load(MODELS_DIR / "lstm_model.pt", map_location="cpu"))
+    LSTM_MODEL.eval()
+else:
+    print("Warning: Skipping LSTM model load because model files are unavailable.")
 
 # ── Kept for backward-compat (upsert/lab endpoints still write CSV) ────────────
 # These globals are loaded ONCE at startup for the upsert helpers and are
@@ -243,6 +266,15 @@ def detect_smurfing(account_id: str) -> Dict:
             "confidence": 0.0, "tx_count": tx_count,
         }
 
+    if LSTM_MODEL is None:
+        return {
+            "detected": False,
+            "fraud_type": "SMURFING",
+            "confidence": 0.0,
+            "tx_count": tx_count,
+            "error": "ML models unavailable",
+        }
+
     x = torch.from_numpy(np.stack([seq])).float()
     with torch.no_grad():
         prob = float(torch.softmax(LSTM_MODEL(x), dim=1)[0, 1].item())
@@ -296,6 +328,16 @@ def detect_dormant(account_id: str) -> Dict:
     props = _fetch_account_features(account_id)
     if props is None:
         return {"detected": False, "fraud_type": "DORMANT_ACTIVATION", "confidence": 0.0}
+
+    if ISO_MODEL is None or SCALER is None:
+        return {
+            "detected": False,
+            "fraud_type": "DORMANT_ACTIVATION",
+            "confidence": 0.0,
+            "dormancy_days": int(props.get("dormancy_days", 0) or 0),
+            "volume_30d": float(props.get("volume_30d", 0.0) or 0.0),
+            "error": "ML models unavailable",
+        }
 
     features = np.array(
         [[float(props.get(col, 0.0) or 0.0) for col in FEATURE_COLS]],
